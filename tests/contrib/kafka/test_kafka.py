@@ -11,6 +11,7 @@ from ddtrace.contrib.kafka.patch import patch
 from ddtrace.contrib.kafka.patch import unpatch
 from ddtrace.filters import TraceFilter
 from tests.contrib.config import KAFKA_CONFIG
+from tests.utils import TracerTestCase
 from tests.utils import override_config
 
 
@@ -79,6 +80,37 @@ def test_consumer_created_with_logger_does_not_raise(tracer):
         logger=logger,
     )
     consumer.close()
+
+
+class KafkaIntegrationTask(TracerTestCase):
+    def setUp(self):
+        super(KafkaIntegrationTask, self).setUp()
+        patch()
+
+    def tearDown(self):
+        unpatch()
+
+    def test_produce_single_server(self):
+        producer = confluent_kafka.Producer({"bootstrap.servers": BOOTSTRAP_SERVERS})
+        Pin.override(producer, tracer=self.tracer)
+        producer.produce(TOPIC_NAME, PAYLOAD, key=KEY)
+        producer.flush()
+
+        traces = self.pop_traces()
+        assert 1 == len(traces)
+        produce_span = traces[0][0]
+        assert produce_span.get_tag("messaging.kafka.bootstrap.servers") == BOOTSTRAP_SERVERS
+
+    def test_produce_server_string(self):
+        producer = confluent_kafka.Producer({"bootstrap.servers": ",".join([BOOTSTRAP_SERVERS] * 3)})
+        Pin.override(producer, tracer=self.tracer)
+        producer.produce(TOPIC_NAME, PAYLOAD, key=KEY)
+        producer.flush()
+
+        traces = self.pop_traces()
+        assert 1 == len(traces)
+        produce_span = traces[0][0]
+        assert produce_span.get_tag("messaging.kafka.bootstrap.servers") == ",".join([BOOTSTRAP_SERVERS] * 3)
 
 
 @pytest.mark.parametrize("tombstone", [False, True])
