@@ -380,11 +380,8 @@ def test_span_creation_metrics():
     assert any(isinstance(sp, SpanAggregator) for sp in tracer._span_processors)
 
     with mock.patch("ddtrace.internal.processor.trace.telemetry_metrics_writer.add_count_metric") as mock_tm:
-        span = tracer.trace("span")
-        mock_tm.assert_called_once_with("tracers", "datadog.span_created")
-        mock_tm.reset_mock()
-        span.finish()
-        mock_tm.assert_called_once_with("tracers", "datadog.span_finished")
+        tracer.trace("span").finish()
+        mock_tm.assert_called_once_with("tracers", "datadog.span_finished", 1)
 
 
 def test_single_span_sampling_processor():
