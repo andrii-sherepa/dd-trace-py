@@ -1,4 +1,5 @@
 import os
+import re
 
 import pytest
 
@@ -200,7 +201,12 @@ tracer.trace("hello").finish()
     app_started_events = [event for event in events if event["request_type"] == "app-started"]
     assert len(app_started_events) == 1
     assert app_started_events[0]["payload"]["error"]["code"] == 1
-    assert "error applying processor FailingFilture()" in app_started_events[0]["payload"]["error"]["message"]
+    pattern = re.compile(
+        ".*ddtrace/internal/processor/trace.py/trace.py:[0-9]+: error applying processor FailingFilture()"
+    )
+    assert pattern.match(app_started_events[0]["payload"]["error"]["message"]), app_started_events[0]["payload"][
+        "error"
+    ]["message"]
 
 
 def test_app_started_error_unhandled_exception(test_agent_session, run_python_code_in_subprocess):

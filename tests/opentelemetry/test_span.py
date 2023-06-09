@@ -213,4 +213,4 @@ def test_otel_span_creation_metrics(oteltracer):
         otelspan = oteltracer.start_span("otel")
         assert otelspan._ddspan._span_api is SPAN_API_OTEL
         otelspan.end()
-        mock_tm.assert_called_once_with("tracers", "otel.span_finished")
+        mock_tm.assert_called_once_with("tracers", "otel.span_finished", 1)

@@ -35,7 +35,6 @@ from .data import get_application
 from .data import get_dependencies
 from .data import get_host_info
 from .metrics import MetricTagType
-from .metrics import MetricType
 from .metrics_namespaces import MetricNamespace
 from .metrics_namespaces import NamespaceMetricType
 
@@ -274,42 +273,61 @@ class TelemetryLogsMetricsWriter(TelemetryBase):
         """
         Queues gauge metric
         """
-        self._add_metric(TELEMETRY_METRIC_TYPE_GAUGE, namespace, name, value, tags)
+        if self.status == ServiceStatus.RUNNING or self.enable():
+            self._namespace.add_metric(
+                TELEMETRY_METRIC_TYPE_GAUGE,
+                namespace,
+                name,
+                value,
+                tags,
+                self.interval,
+            )
 
     def add_rate_metric(self, namespace, name, value=1.0, tags={}):
         # type: (str,str, float, MetricTagType) -> None
         """
         Queues rate metric
         """
-        self._add_metric(TELEMETRY_METRIC_TYPE_RATE, namespace, name, value, tags)
+        if self.status == ServiceStatus.RUNNING or self.enable():
+            self._namespace.add_metric(
+                TELEMETRY_METRIC_TYPE_RATE,
+                namespace,
+                name,
+                value,
+                tags,
+                self.interval,
+            )
 
     def add_count_metric(self, namespace, name, value=1.0, tags={}):
         # type: (str,str, float, MetricTagType) -> None
         """
         Queues count metric
         """
-        self._add_metric(TELEMETRY_METRIC_TYPE_COUNT, namespace, name, value, tags)
+        if self.status == ServiceStatus.RUNNING or self.enable():
+            self._namespace.add_metric(
+                TELEMETRY_METRIC_TYPE_COUNT,
+                namespace,
+                name,
+                value,
+                tags,
+            )
 
     def add_distribution_metric(self, namespace, name, value=1.0, tags={}):
         # type: (str,str, float, MetricTagType) -> None
         """
         Queues distributions metric
         """
-        self._add_metric(TELEMETRY_METRIC_TYPE_DISTRIBUTIONS, namespace, name, value, tags)
-
-    def _add_metric(self, metric_type, namespace, name, value=1.0, tags={}):
-        # type: (MetricType, str,str, float, MetricTagType) -> None
-        """
-        Queues metric
-        """
-        if self.enable():
-            with self._lock:
-                self._namespace._add_metric(
-                    metric_type, namespace, name, value, tags, interval=_get_heartbeat_interval_or_default()
-                )
+        if self.status == ServiceStatus.RUNNING or self.enable():
+            self._namespace.add_metric(
+                TELEMETRY_METRIC_TYPE_DISTRIBUTIONS,
+                namespace,
+                name,
+                value,
+                tags,
+            )
 
     def periodic(self):
-        namespace_metrics = self._flush_namespace_metrics()
+        namespace_metrics = self._namespace.flush()
         if namespace_metrics:
             self._generate_metrics_event(namespace_metrics)
 
@@ -321,27 +339,11 @@ class TelemetryLogsMetricsWriter(TelemetryBase):
         for telemetry_event in telemetry_events:
             self._client.send_event(telemetry_event)
 
-    def _flush_namespace_metrics(self):
-        # type () -> List[Metric]
-        """Returns a list of all generated metrics and clears the namespace's list"""
-        with self._lock:
-            try:
-                namespace_metrics = self._namespace.get()
-            except Exception:
-                log.debug("Unexpected error in Telemetry Metrics", exc_info=True)
-            finally:
-                self._namespace._flush()
-        return namespace_metrics
-
     def _flush_log_metrics(self):
         # type () -> List[Metric]
         with self._lock:
-            try:
-                log_metrics = list(self._logs)
-            except Exception:
-                log.debug("Unexpected error in Logs Metrics", exc_info=True)
-            finally:
-                self._logs = []
+            log_metrics = self._logs
+            self._logs = []
         return log_metrics
 
     def _generate_metrics_event(self, namespace_metrics):
@@ -372,7 +374,7 @@ class TelemetryLogsMetricsWriter(TelemetryBase):
     def reset_queues(self):
         # type: () -> None
         super(TelemetryLogsMetricsWriter, self).reset_queues()
-        self._namespace._flush()
+        self._namespace.flush()
         self._logs = []
 
 
